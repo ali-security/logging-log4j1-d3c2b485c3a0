@@ -1,0 +1,56 @@
+name: seal-build
+
+# Upstream log4j 1.2 has no GitHub Actions CI. This workflow reproduces the
+# project's own Maven build (`mvn verify`), whose test phase runs the Ant
+# regression suite in tests/build.xml (target runAll) via maven-antrun-plugin.
+on:
+  workflow_dispatch:
+    inputs:
+      test-filter:
+        description: "Ant target of tests/build.xml to run instead of runAll (e.g. SocketServer); empty runs the full suite"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # JDK 7 + Maven 3 (setup-java no longer provisions any JDK 7), run in the
+      # maven:3-jdk-7 image; JDK 7 still compiles the pom's source/target 1.4.
+      - name: Build and test
+        run: |
+          set -o pipefail
+          TARGET="${{ inputs.test-filter }}"
+          docker run --rm -v "$PWD":/workdir -w /workdir \
+            -e MAVEN_OPTS=-Dhttps.protocols=TLSv1.2 \
+            maven:3-jdk-7 \
+            sh -c "java -version && mvn -v && mvn -B clean verify -Dmaven.site.skip=true -Dlog4j.tests.target=${TARGET:-runAll}" \
+            2>&1 | tee build.log
+
+      - name: Test summary
+        run: |
+          awk '
+            /\[junit\] Testsuite:/ { suite=$NF; pending=1; next }
+            pending && /\[junit\] Tests run:/ {
+              split($0, a, /Tests run: |, Failures: |, Errors: |, Time elapsed/)
+              run+=a[2]; fail+=a[3]; err+=a[4]; suites++
+              printf "  %-60s run=%s failures=%s errors=%s\n", suite, a[2], a[3], a[4]
+              pending=0
+            }
+            END {
+              printf "TEST SUMMARY: %d suites, %d tests run, %d passed, %d failures, %d errors\n", suites, run, run-fail-err, fail, err
+              if (suites == 0 || fail + err > 0) exit 1
+            }
+          ' build.log
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: log4j-jar
+          path: |
+            target/log4j-*.jar
+            !target/log4j-*-sources.jar
+            !target/log4j-*-javadoc.jar
+          if-no-files-found: error
