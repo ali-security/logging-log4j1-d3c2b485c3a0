@@ -113,6 +113,9 @@
     <condition property="is-windows" value="true">
         <os family="windows"/>
     </condition>
+    <condition property="is-linux" value="true">
+        <os name="Linux"/>
+    </condition>
   </target>
 
   <!-- Clean the parent project                                          -->
@@ -176,7 +179,7 @@
                                      LevelMatchFilter, PatternParser, 
                                      ErrorHandler,Rewrite, JNDIUtil, JMSAppender,
                                      JMSSink, HardenedObjectInputStream,
-                                     LoggingReceiver"/>
+                                     LoggingReceiver, NTEventLogAppenderDllPath"/>
 
   <!-- ================================================================= -->
   <!-- Longer unit tests                                                 -->
@@ -498,6 +501,17 @@
       <formatter type="plain" usefile="false"/>
       <test name="org.apache.log4j.nt.NTEventLogAppenderTest" />
     </junit>
+  </target>
+
+  <!--  loads the appender through log4j.nteventlog.dll.path,
+           so no NTEventLogAppender DLL is needed  -->
+  <target name="NTEventLogAppenderDllPath" depends="build" if="is-linux">
+      <junit printsummary="yes" fork="yes"
+        haltonfailure="${haltonfailure}" dir="${basedir}">
+        <classpath refid="tests.classpath"/>
+        <formatter type="plain" usefile="false"/>
+        <test name="org.apache.log4j.nt.NTEventLogAppenderDllPathTest" />
+      </junit>
   </target>
 
   <target name="HardenedObjectInputStream" depends="build">
